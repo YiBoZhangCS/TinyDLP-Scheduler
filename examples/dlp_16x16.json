@@ -1,0 +1,11 @@
+{
+  "name": "TinyDLP-16x16",
+  "array_m": 16,
+  "array_n": 16,
+  "mac_per_pe_per_cycle": 1,
+  "frequency_mhz": 500,
+  "sram_kb": 64,
+  "dram_bandwidth_gb_s": 12.8,
+  "data_width_bits": 8,
+  "acc_width_bits": 32
+}

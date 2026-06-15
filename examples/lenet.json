@@ -1,0 +1,38 @@
+{
+  "name": "LeNet-like Tiny Model",
+  "layers": [
+    {
+      "type": "conv2d",
+      "name": "conv1",
+      "batch": 1,
+      "C": 3,
+      "H": 32,
+      "W": 32,
+      "K": 16,
+      "R": 3,
+      "S": 3,
+      "stride": 1,
+      "padding": 1
+    },
+    {
+      "type": "conv2d",
+      "name": "conv2",
+      "batch": 1,
+      "C": 16,
+      "H": 32,
+      "W": 32,
+      "K": 32,
+      "R": 3,
+      "S": 3,
+      "stride": 1,
+      "padding": 1
+    },
+    {
+      "type": "fc",
+      "name": "fc1",
+      "batch": 1,
+      "in_features": 1024,
+      "out_features": 120
+    }
+  ]
+}
