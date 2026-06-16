@@ -1,3 +1,5 @@
+"""测试 tile：验证 GEMM/Conv tile 的 SRAM 占用和 halo 计算。"""
+
 from tinydlp.hardware import HardwareConfig
 from tinydlp.gemm import GEMMShape
 from tinydlp.scheduler import enumerate_gemm_tiles

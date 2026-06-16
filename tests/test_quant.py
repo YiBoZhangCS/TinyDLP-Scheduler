@@ -1,3 +1,5 @@
+"""测试 quant：验证 INT8 affine 量化、反量化和 demo 误差指标。"""
+
 import numpy as np
 
 from tinydlp.quant import (

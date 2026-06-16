@@ -1,6 +1,6 @@
-"""SRAM sensitivity demo for TinyDLP schedule search.
+"""旧版 SRAM 敏感性 demo：观察片上 SRAM 容量变化对调度结果的影响。
 
-Run from the project root:
+从项目根目录运行：
 
     python examples/sram_sensitivity_demo.py
 """

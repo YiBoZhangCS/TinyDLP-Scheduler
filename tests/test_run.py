@@ -1,3 +1,5 @@
+"""测试 run.py：验证 JSON 加载、模型运行和报告/图表生成。"""
+
 from pathlib import Path
 
 from run import load_hardware, load_model_layers, run_model
@@ -23,6 +25,10 @@ def test_load_model_layers_from_json() -> None:
     assert layers[0].to_gemm_shape().M == 1024
     assert layers[0].to_gemm_shape().K == 27
     assert layers[0].to_gemm_shape().N == 16
+    assert layers[1].kernel_h == 5
+    assert layers[1].kernel_w == 5
+    assert layers[1].padding == 2
+    assert layers[1].to_gemm_shape().K == 16 * 5 * 5
 
 
 def test_run_model_returns_one_schedule_per_layer(capsys, tmp_path) -> None:

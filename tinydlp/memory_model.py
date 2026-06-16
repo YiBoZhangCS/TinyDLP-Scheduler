@@ -1,4 +1,4 @@
-"""Baseline DRAM traffic estimates for GEMM."""
+"""基础 DRAM 访存模型：估计 GEMM 输入、权重和输出的片外搬运量。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def _ceil_div_float(numerator: int, denominator: float) -> int:
 
 @dataclass(frozen=True)
 class MemoryResult:
-    """Summary of estimated DRAM traffic and memory-bound cycles."""
+    """DRAM 访存字节数和对应 memory-bound 周期的汇总。"""
 
     dram_bytes: int
     memory_cycles: int
@@ -23,16 +23,16 @@ class MemoryResult:
 
 
 def baseline_dram_bytes(gemm: GEMMShape, hw: HardwareConfig) -> int:
-    """Return baseline DRAM bytes assuming A, B, and C each move once."""
+    """假设 A/B/C 各搬运一次，返回基础 DRAM 字节数。"""
 
-    # Baseline traffic model for C = A x B:
-    # A bytes = M * K * data_bytes, because A stores input activations.
-    # B bytes = K * N * data_bytes, because B stores weights.
-    # C bytes = M * N * data_bytes, because this is the final output writeback.
+    # C = A x B 的基础 traffic 模型：
+    # A bytes = M * K * data_bytes，因为 A 存输入激活。
+    # B bytes = K * N * data_bytes，因为 B 存权重。
+    # C bytes = M * N * data_bytes，因为 C 是最终输出写回。
     #
-    # Note that final output writeback usually uses data_width_bits. Partial
-    # sums are accumulated on chip with acc_width_bits, such as INT8 multiply
-    # with INT32 accumulation, and are not counted as baseline DRAM traffic here.
+    # 注意：最终输出写回通常按 data_width_bits 估算。
+    # partial sum 在片上用 acc_width_bits 累加，例如 INT8 乘法配 INT32 累加；
+    # 这里的 baseline 不把片上 partial sum 计入 DRAM traffic。
     data_bytes = hw.data_bytes()
     a_bytes = gemm.M * gemm.K * data_bytes
     b_bytes = gemm.K * gemm.N * data_bytes
@@ -41,17 +41,17 @@ def baseline_dram_bytes(gemm: GEMMShape, hw: HardwareConfig) -> int:
 
 
 def memory_cycles(dram_bytes: int, hw: HardwareConfig) -> int:
-    """Return cycles needed to move dram_bytes at configured DRAM bandwidth."""
+    """根据硬件 DRAM 带宽，返回搬运 dram_bytes 需要的周期数。"""
 
     if dram_bytes < 0:
         raise ValueError(f"dram_bytes must be non-negative, got {dram_bytes}")
-    # dram_bytes_per_cycle converts off-chip bandwidth into bytes/cycle.
-    # cycles = ceil(total DRAM bytes / bytes per cycle).
+    # dram_bytes_per_cycle 把片外带宽换算成 bytes/cycle。
+    # cycles = ceil(total DRAM bytes / bytes per cycle)。
     return _ceil_div_float(dram_bytes, hw.dram_bytes_per_cycle())
 
 
 def estimate_baseline_memory(gemm: GEMMShape, hw: HardwareConfig) -> MemoryResult:
-    """Estimate baseline DRAM traffic and memory cycles for one GEMM."""
+    """估计一个 GEMM 的基础 DRAM traffic 和 memory cycles。"""
 
     dram_bytes = baseline_dram_bytes(gemm, hw)
     return MemoryResult(

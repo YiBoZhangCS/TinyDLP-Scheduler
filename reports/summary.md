@@ -20,15 +20,15 @@ TinyDLP-Scheduler 用于学习 Conv/GEMM 在简化深度学习处理器上的映
 | layer | original shape | GEMM M/K/N | MACs | tile | dataflow | PE util | DRAM bytes | no-overlap | ideal-overlap | bottleneck |
 |---|---|---:|---:|---|---|---:|---:|---:|---:|---|
 | conv1 | Conv N=1, C=3, HxW=32x32, Kout=16, RxS=3x3, P/Q=32x32 | 1024/27/16 | 442368 | 512x1x16 | output_stationary | 0.4737 | 44896 | 5402 | 3648 | compute-bound |
-| conv2 | Conv N=1, C=16, HxW=32x32, Kout=32, RxS=3x3, P/Q=32x32 | 1024/144/32 | 4718592 | 256x1x32 | output_stationary | 0.8276 | 198656 | 30032 | 22272 | compute-bound |
+| conv2 | Conv N=1, C=16, HxW=32x32, Kout=32, RxS=5x5, P/Q=32x32 | 1024/400/32 | 13107200 | 256x1x32 | output_stationary | 0.9302 | 493568 | 74320 | 55040 | compute-bound |
 | fc1 | FC batch=1, in=1024, out=120 | 1/1024/120 | 122880 | 1x512x1 | input_stationary | 0.0569 | 124984 | 13315 | 8432 | compute-bound |
 
-## Network Summary
+## 网络汇总
 
-- 总 MACs: `5283840`
-- 总 DRAM traffic: `368536` bytes
-- 总 no-overlap cycles: `48749`
-- 总 ideal-overlap cycles: `34352`
+- 总 MACs: `13672448`
+- 总 DRAM traffic: `663448` bytes
+- 总 no-overlap cycles: `93037`
+- 总 ideal-overlap cycles: `67120`
 
 ## Bottleneck 解释
 

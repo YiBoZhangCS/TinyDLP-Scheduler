@@ -27,7 +27,7 @@ class ComputeResult:
 
 @dataclass(frozen=True)
 class TileComputeResult:
-    """Compute estimate for one GEMM/Conv tile on a systolic array."""
+    """一个 GEMM/Conv tile 在脉动阵列上的计算估计。"""
 
     useful_macs: int
     ideal_cycles: int
@@ -55,12 +55,12 @@ def estimate_tile_compute(
     array_n: int,
     mac_per_pe_per_cycle: int = 1,
 ) -> TileComputeResult:
-    """Estimate compute cycles for one output tile on a systolic array.
+    """估计一个输出 tile 在脉动阵列上的计算周期。
 
-    This function exposes two important effects explicitly:
+    这个函数显式体现两个关键影响：
 
-    - modulus effect: M_tile/N_tile tails still occupy full array blocks;
-    - fill/drain overhead: each array block pays array_m + array_n - 2 cycles.
+    - 模数效应：M_tile/N_tile 的尾块仍然占用完整阵列 block；
+    - fill/drain 开销：每个阵列 block 额外付出 array_m + array_n - 2 周期。
     """
 
     for name, value in (
@@ -82,9 +82,9 @@ def estimate_tile_compute(
     ideal_cycles = _ceil_div(useful_macs, peak_macs)
     array_aware_cycles = m_blocks * n_blocks * K_tile
 
-    # For one systolic array block, K_tile cycles perform the reduction. The
-    # extra array_m + array_n - 2 cycles approximate the time for operands to
-    # fill the 2D PE wavefront and for the last accumulated results to drain.
+    # 对一个脉动阵列 block，K_tile 个周期负责 reduction。
+    # 额外的 array_m + array_n - 2 周期近似表示：
+    # 输入操作数从阵列边缘流入并填满二维 PE 波前，以及最后结果排出的时间。
     systolic_cycles = m_blocks * n_blocks * (K_tile + array_m + array_n - 2)
     provided_mac_slots = systolic_cycles * peak_macs
     pe_utilization = useful_macs / provided_mac_slots

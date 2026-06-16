@@ -1,6 +1,6 @@
-"""Array-size sensitivity demo for GEMM compute efficiency.
+"""阵列尺寸敏感性 demo：固定 GEMM，观察不同 PE 阵列规模下的利用率。
 
-Run from the project root:
+从项目根目录运行：
 
     python examples/array_size_sensitivity_demo.py
 """
@@ -25,8 +25,8 @@ FIG_PATH = PROJECT_ROOT / "figs" / "array_size_sensitivity.png"
 
 
 def build_gemm() -> GEMMShape:
-    # This GEMM corresponds to Conv 1x3x32x32 with 16 output channels and a
-    # 3x3 kernel: M = batch * P * Q = 1024, K = C * R * S = 27, N = filters = 16.
+    # 这个 GEMM 对应 Conv：输入 1x3x32x32，输出通道 16，卷积核 3x3。
+    # 映射后 M = batch * P * Q = 1024，K = C * R * S = 27，N = Kout = 16。
     return GEMMShape(M=1024, K=27, N=16, name="conv1_gemm")
 
 

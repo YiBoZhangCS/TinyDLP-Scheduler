@@ -1,6 +1,6 @@
-"""Show how SRAM capacity changes Conv tiling, dataflow, and DRAM traffic.
+"""PPT demo 2：展示 SRAM 容量、Conv tiling 和 dataflow 对 DRAM traffic 的影响。
 
-Run from the project root:
+从项目根目录运行：
 
     python examples/sram_dataflow_demo.py
 """

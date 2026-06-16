@@ -1,3 +1,5 @@
+"""测试 memory_model：验证基础 DRAM traffic 和 memory cycles 计算。"""
+
 from tinydlp.gemm import GEMMShape
 from tinydlp.hardware import HardwareConfig
 from tinydlp.memory_model import (

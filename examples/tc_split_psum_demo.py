@@ -1,6 +1,6 @@
-"""Show partial-sum traffic when input channels are split by Tc.
+"""PPT demo 3：展示 Tc 切分后 partial sum 是否留 SRAM 对访存量的影响。
 
-Run from the project root:
+从项目根目录运行：
 
     python examples/tc_split_psum_demo.py
 """

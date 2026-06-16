@@ -1,3 +1,5 @@
+"""测试 layer：验证 Conv/FC 参数、输出尺寸和 Conv->GEMM 映射。"""
+
 from tinydlp.layer import Conv2DLayer, FullyConnectedLayer
 
 

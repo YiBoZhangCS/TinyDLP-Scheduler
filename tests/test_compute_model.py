@@ -1,3 +1,5 @@
+"""测试 compute_model：验证理想周期、模数效应和 fill/drain 周期。"""
+
 from tinydlp.compute_model import (
     ComputeResult,
     array_aware_gemm_cycles,

@@ -1,4 +1,4 @@
-"""SRAM tile helpers for GEMM and Conv-native mappings."""
+"""SRAM tile 工具：计算 GEMM/Conv tile 的片上存储占用。"""
 
 from __future__ import annotations
 
@@ -14,14 +14,11 @@ def _validate_positive(name: str, value: int) -> None:
 
 @dataclass(frozen=True)
 class GEMMTile:
-    """A GEMM tile over C = A x B.
+    """GEMM 矩阵乘法 C = A x B 的一个 tile。
 
-    tile_m: rows of output matrix C processed at once. For convolution, this
-        corresponds to a group of output spatial positions.
-    tile_n: columns of output matrix C processed at once. For convolution, this
-        corresponds to a group of output channels / filters.
-    tile_k: reduction dimension tile. For convolution, this corresponds to a
-        slice of C_in * R * S.
+    tile_m：一次处理的输出矩阵 C 的行数。对卷积来说，对应一组输出空间位置。
+    tile_n：一次处理的输出矩阵 C 的列数。对卷积来说，对应一组输出通道。
+    tile_k：reduction 维度切片。对卷积来说，对应 C_in * R * S 的一段。
     """
 
     tile_m: int
@@ -36,15 +33,15 @@ class GEMMTile:
 
 @dataclass(frozen=True)
 class ConvTile:
-    """A Conv2D tile in NCHW-style loop dimensions.
+    """Conv2D 原生循环维度上的 tile。
 
-    The public names follow the common accelerator tiling notation:
+    这些名字沿用常见加速器 tiling 记法：
 
-    - Tb: batch tile
-    - Tm: output-channel tile
-    - Tc: input-channel tile
-    - Tp: output-height tile
-    - Tq: output-width tile
+    - Tb：batch 方向切分
+    - Tm：输出通道方向切分
+    - Tc：输入通道方向切分
+    - Tp：输出高度方向切分
+    - Tq：输出宽度方向切分
     """
 
     tb: int
@@ -61,14 +58,14 @@ class ConvTile:
         _validate_positive("tq", self.tq)
 
     def to_gemm_tile(self, kernel_h: int, kernel_w: int) -> GEMMTile:
-        """Return the equivalent GEMM tile for this convolution tile."""
+        """返回该 Conv tile 对应的 GEMM tile。"""
 
         return conv_tile_to_gemm_tile(self, kernel_h, kernel_w)
 
 
 @dataclass(frozen=True)
 class ConvTileSRAMUsage:
-    """SRAM breakdown for one Conv tile."""
+    """一个 Conv tile 的 SRAM 占用拆解。"""
 
     input_h_tile: int
     input_w_tile: int
@@ -81,46 +78,44 @@ class ConvTileSRAMUsage:
 
     @property
     def fits_sram(self) -> bool:
-        """Return whether this tile fits in the configured SRAM capacity."""
+        """返回该 tile 是否能放入给定 SRAM 容量。"""
 
         return self.total_sram_bytes <= self.sram_capacity_bytes
 
 
 def a_tile_bytes(tile: GEMMTile, hw: HardwareConfig) -> int:
-    """Return bytes for A_tile with shape tile_m x tile_k."""
+    """返回 A_tile 的字节数，形状为 tile_m x tile_k。"""
 
-    # A_tile stores input activations/unfolded inputs and uses data_width_bits.
+    # A_tile 存输入激活或 im2col 后展开的输入，使用 data_width_bits。
     return tile.tile_m * tile.tile_k * hw.data_bytes()
 
 
 def b_tile_bytes(tile: GEMMTile, hw: HardwareConfig) -> int:
-    """Return bytes for B_tile with shape tile_k x tile_n."""
+    """返回 B_tile 的字节数，形状为 tile_k x tile_n。"""
 
-    # B_tile stores weights and uses data_width_bits.
+    # B_tile 存权重，使用 data_width_bits。
     return tile.tile_k * tile.tile_n * hw.data_bytes()
 
 
 def c_tile_bytes(tile: GEMMTile, hw: HardwareConfig) -> int:
-    """Return bytes for C_tile / partial sums with shape tile_m x tile_n."""
+    """返回 C_tile / partial sum 的字节数，形状为 tile_m x tile_n。"""
 
-    # C_tile stores output partial sums, so it uses acc_width_bits rather than
-    # data_width_bits. For example, INT8 x INT8 products are commonly accumulated
-    # into INT32 partial sums to avoid overflow during the reduction.
+    # C_tile 存输出 partial sum，所以使用 acc_width_bits，而不是 data_width_bits。
+    # 例如 INT8 x INT8 通常累加到 INT32，避免 reduction 过程中溢出。
     #
-    # When the full GEMM K dimension is larger than tile_k, the scheduler must
-    # visit the K dimension multiple times and keep accumulating into the same
-    # C_tile partial sums.
+    # 当完整 GEMM 的 K 维度大于 tile_k 时，调度器要多次遍历 K tile，
+    # 并把结果持续累加到同一个 C_tile partial sum。
     return tile.tile_m * tile.tile_n * hw.acc_bytes()
 
 
 def total_sram_bytes(tile: GEMMTile, hw: HardwareConfig) -> int:
-    """Return total SRAM bytes needed by A, B, and C tiles."""
+    """返回 A/B/C 三个 tile 总共需要的 SRAM 字节数。"""
 
     return a_tile_bytes(tile, hw) + b_tile_bytes(tile, hw) + c_tile_bytes(tile, hw)
 
 
 def is_valid_tile(tile: GEMMTile, hw: HardwareConfig) -> bool:
-    """Return whether the tile fits in the configured SRAM capacity."""
+    """返回该 GEMM tile 是否满足 SRAM 容量约束。"""
 
     return total_sram_bytes(tile, hw) <= hw.sram_bytes()
 
@@ -130,10 +125,10 @@ def conv_tile_to_gemm_tile(
     kernel_h: int,
     kernel_w: int,
 ) -> GEMMTile:
-    """Map a Conv-native tile to the equivalent GEMM tile.
+    """把 Conv 原生 tile 映射成等价的 GEMM tile。
 
-    M_tile is the number of output positions in the tile, N_tile is the number
-    of output channels, and K_tile is the reduction slice over C * R * S.
+    M_tile 是 tile 内输出位置数量，N_tile 是输出通道数量，
+    K_tile 是 C * R * S reduction 维度上的切片。
     """
 
     _validate_positive("kernel_h", kernel_h)
@@ -156,10 +151,10 @@ def conv_tile_sram_usage(
     sram_capacity_bytes: int,
     double_buffer: bool = False,
 ) -> ConvTileSRAMUsage:
-    """Return SRAM usage for one Conv tile, including spatial halo.
+    """返回一个 Conv tile 的 SRAM 占用，并显式考虑空间 halo。
 
-    A Tp x Tq output tile needs a larger input window because neighboring
-    output points share kernel footprints. With stride `u`, the input window is:
+    一个 Tp x Tq 输出 tile 需要比 Tp x Tq 更大的输入窗口，因为边界输出点
+    仍然要覆盖完整卷积核。设 stride 为 u，则输入窗口是：
 
     input_h_tile = (Tp - 1) * u + R
     input_w_tile = (Tq - 1) * u + S
@@ -210,7 +205,7 @@ def conv_tile_sram_usage_for_hw(
     hw: HardwareConfig,
     double_buffer: bool = False,
 ) -> ConvTileSRAMUsage:
-    """Return Conv tile SRAM usage using byte widths from a HardwareConfig."""
+    """使用 HardwareConfig 中的数据位宽计算 Conv tile 的 SRAM 占用。"""
 
     return conv_tile_sram_usage(
         tile=tile,

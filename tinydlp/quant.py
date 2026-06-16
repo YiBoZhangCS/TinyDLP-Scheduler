@@ -1,4 +1,4 @@
-"""Per-tensor affine quantization helpers."""
+"""量化小工具：演示 per-tensor affine INT8 量化和矩阵乘误差。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import numpy as np
 
 @dataclass(frozen=True)
 class Int8MatmulDemoResult:
-    """Numerical summary for the int8 matmul demo."""
+    """INT8 矩阵乘 demo 的数值误差汇总。"""
 
     scale_a: float
     zero_point_a: int
@@ -25,14 +25,14 @@ def choose_scale_zero_point(
     qmin: int = -128,
     qmax: int = 127,
 ) -> tuple[float, int]:
-    """Choose affine quantization parameters for one tensor.
+    """为一个张量选择 affine 量化参数。
 
-    Affine quantization maps float values to integers with:
+    Affine 量化把浮点数映射到整数：
         q = round(x / scale + zero_point)
         x ~= scale * (q - zero_point)
 
-    scale represents the float range covered by one integer step. zero_point is
-    the integer value that represents real value 0 as closely as possible.
+    scale 表示一个整数步长覆盖的浮点范围；zero_point 是尽量表示真实 0
+    的整数值。
     """
 
     if qmin >= qmax:
@@ -57,12 +57,12 @@ def quantize(
     qmin: int = -128,
     qmax: int = 127,
 ) -> np.ndarray:
-    """Quantize a float tensor to int8 using affine parameters."""
+    """使用 affine 参数把 float 张量量化为 int8。"""
 
     if scale <= 0:
         raise ValueError("scale must be positive")
 
-    # zero_point participates in quantization: q = round(x / scale + zp).
+    # zero_point 参与量化公式：q = round(x / scale + zp)。
     q = np.round(x.astype(np.float32) / scale + zero_point)
     q = np.clip(q, qmin, qmax)
     return q.astype(np.int8)
@@ -73,22 +73,21 @@ def dequantize(
     scale: float,
     zero_point: int,
 ) -> np.ndarray:
-    """Dequantize an affine-quantized tensor back to float32."""
+    """把 affine 量化后的张量反量化回 float32。"""
 
     if scale <= 0:
         raise ValueError("scale must be positive")
 
-    # zero_point participates in dequantization: x ~= scale * (q - zp).
+    # zero_point 参与反量化公式：x ~= scale * (q - zp)。
     return (scale * (q.astype(np.int32) - zero_point)).astype(np.float32)
 
 
 def int8_matmul_demo(M: int = 16, K: int = 32, N: int = 16) -> Int8MatmulDemoResult:
-    """Run a small int8 matmul demo and return error metrics.
+    """运行一个小型 INT8 矩阵乘 demo，并返回误差指标。
 
-    This demo explains the numerical meaning of quantized matmul. It is not an
-    industrial quantization recipe. A and B are quantized independently, int8
-    values are shifted by their zero points, multiplication is accumulated in
-    int32, and the result is dequantized with scale_A * scale_B.
+    这个 demo 用来解释量化矩阵乘的数值含义，不是工业级量化方案。
+    A/B 分别量化，int8 数值先减去 zero_point，再用 int32 累加乘法结果，
+    最后用 scale_A * scale_B 反量化。
     """
 
     if M <= 0 or K <= 0 or N <= 0:
@@ -104,9 +103,8 @@ def int8_matmul_demo(M: int = 16, K: int = 32, N: int = 16) -> Int8MatmulDemoRes
     q_a = quantize(a, scale_a, zero_point_a)
     q_b = quantize(b, scale_b, zero_point_b)
 
-    # int8 operands must be promoted to int32 before subtraction/multiplication.
-    # The zero points are subtracted before matmul so that int32 accumulation
-    # approximates sum((A / scale_A) * (B / scale_B)).
+    # int8 操作数必须先提升到 int32，再做减 zero_point 和乘法。
+    # 矩阵乘前先减 zero_point，使 int32 累加近似浮点乘法的缩放前结果。
     a_int = q_a.astype(np.int32) - zero_point_a
     b_int = q_b.astype(np.int32) - zero_point_b
     c_int32 = a_int @ b_int

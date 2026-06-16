@@ -1,3 +1,5 @@
+"""测试 hardware：验证 PE 数、峰值吞吐、SRAM 和 DRAM 带宽换算。"""
+
 from tinydlp.hardware import HardwareConfig
 
 

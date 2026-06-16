@@ -1,6 +1,6 @@
-"""Show modulus effects and systolic fill/drain overhead on Conv shapes.
+"""PPT demo 1：展示 Conv->GEMM 后的模数效应和脉动阵列 fill/drain 开销。
 
-Run from the project root:
+从项目根目录运行：
 
     python examples/mod_and_fill_demo.py
 """

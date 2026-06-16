@@ -1,3 +1,5 @@
+"""测试 dataflow：验证 OS/WS/IS 访存估算和 psum spill 建模。"""
+
 from tinydlp.dataflow import (
     DataflowResult,
     compare_dataflows,
@@ -40,7 +42,7 @@ def test_dataflow_traffic_reflects_reuse_choice() -> None:
 
     assert weight.dram_bytes < output.dram_bytes
     assert input_.dram_bytes != weight.dram_bytes
-    assert "C partial sums" in output.explanation
+    assert "C partial sum" in output.explanation
     assert "B/weight" in weight.explanation
     assert "A/input" in input_.explanation
 

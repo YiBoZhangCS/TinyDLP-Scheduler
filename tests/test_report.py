@@ -1,3 +1,5 @@
+"""测试 report：验证 CSV/Markdown 报告字段和摘要内容。"""
+
 import csv
 
 from tinydlp.gemm import GEMMShape

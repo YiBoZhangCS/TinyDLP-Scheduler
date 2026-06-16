@@ -1,3 +1,5 @@
+"""测试 scheduler：验证 tile/dataflow 搜索、瓶颈判断和 Conv 搜索入口。"""
+
 import pytest
 
 from tinydlp.compute_model import estimate_compute
@@ -7,6 +9,7 @@ from tinydlp.scheduler import (
     ConvScheduleResult,
     ScheduleResult,
     evaluate_schedule,
+    generate_conv_tile_candidates,
     pretty_print_schedule,
     search_best_conv_schedule,
     search_best_schedule,
@@ -152,3 +155,29 @@ def test_search_best_conv_schedule_returns_breakdowns() -> None:
     assert result.sram_usage.fits_sram
     assert result.dram_traffic.total_dram_bytes > 0
     assert result.total_cycles == result.ideal_overlap_cycles
+
+
+def test_conv_tile_candidates_prioritize_m_aligned_spatial_tiles() -> None:
+    layer = Conv2DLayer(
+        name="conv5x5",
+        batch=1,
+        in_channels=8,
+        in_h=32,
+        in_w=32,
+        out_channels=16,
+        kernel_h=5,
+        kernel_w=5,
+        stride=1,
+        padding=0,
+    )
+    hw = HardwareConfig(name="dlp_24x16", array_m=24, array_n=16, sram_kb=64)
+
+    candidates = generate_conv_tile_candidates(layer, hw)
+
+    assert candidates
+    first = candidates[0]
+    assert (first.tb * first.tp * first.tq) % hw.array_m == 0
+    assert any(
+        (tile.tp in {3, 6, 12, 24} or tile.tq in {3, 6, 12, 24})
+        for tile in candidates
+    )

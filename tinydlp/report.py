@@ -1,4 +1,4 @@
-"""CSV and Markdown report generation."""
+"""报告生成：把每层调度结果写成 CSV 和 Markdown。"""
 
 from __future__ import annotations
 
@@ -150,7 +150,7 @@ def write_result_csv(
     output_dir: str | Path,
     layers: list[Layer] | None = None,
 ) -> Path:
-    """Write per-layer schedule results to result.csv."""
+    """把每层调度结果写入 result.csv。"""
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -238,7 +238,7 @@ def write_summary_md(
     hw: HardwareConfig | None = None,
     layers: list[Layer] | None = None,
 ) -> Path:
-    """Write a Markdown summary report."""
+    """写出 Markdown 摘要报告。"""
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -266,7 +266,7 @@ def write_summary_md(
             "",
             _layer_table(results, layers),
             "",
-            "## Network Summary",
+            "## 网络汇总",
             "",
             f"- 总 MACs: `{total_macs}`",
             f"- 总 DRAM traffic: `{total_dram_bytes}` bytes",
@@ -301,7 +301,7 @@ def generate_reports(
     hw: HardwareConfig | None = None,
     layers: list[Layer] | None = None,
 ) -> tuple[Path, Path]:
-    """Generate result.csv and summary.md."""
+    """同时生成 result.csv 和 summary.md。"""
 
     csv_path = write_result_csv(results, output_dir, layers)
     md_path = write_summary_md(results, output_dir, hw, layers)

@@ -1,4 +1,4 @@
-"""Matplotlib plots generated from TinyDLP CSV reports."""
+"""标准结果图生成：从 reports/result.csv 读取数据并输出 figs/*.png。"""
 
 from __future__ import annotations
 
@@ -124,7 +124,7 @@ def generate_plots(
     csv_path: str | Path = "reports/result.csv",
     output_dir: str | Path = "figs",
 ) -> list[Path]:
-    """Generate all standard plots from result.csv."""
+    """从 result.csv 生成默认四张图：延迟、计算/访存、PE 利用率和 DRAM traffic。"""
 
     rows = _read_rows(csv_path)
     fig_dir = Path(output_dir)

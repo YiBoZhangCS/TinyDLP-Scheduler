@@ -1,4 +1,4 @@
-"""Run the TinyDLP int8 quantized matmul demo."""
+"""运行 INT8 量化矩阵乘 demo，观察量化误差。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Command-line entry point for TinyDLP-Scheduler."""
+"""命令行入口：读取模型/硬件 JSON，运行调度搜索，并生成报告和图。"""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _read_json(path: str | Path) -> dict[str, Any]:
 
 
 def load_hardware(path: str | Path) -> HardwareConfig:
-    """Load a HardwareConfig from JSON."""
+    """从硬件 JSON 文件读取 HardwareConfig。"""
 
     data = _read_json(path)
     return HardwareConfig(
@@ -83,7 +83,7 @@ def _load_layer(data: dict[str, Any]) -> Layer:
 
 
 def load_model_layers(path: str | Path) -> list[Layer]:
-    """Load Conv2D and fully connected layers from a model JSON file."""
+    """从模型 JSON 文件读取 Conv2D 和全连接层。"""
 
     data = _read_json(path)
     raw_layers = data.get("layers")
@@ -100,7 +100,7 @@ def run_model(
     plot: bool = False,
     fig_dir: str | Path = "figs",
 ) -> list[ScheduleResult]:
-    """Evaluate every layer in a model JSON file."""
+    """评估模型 JSON 中的每一层，并生成可选报告/图表。"""
 
     hw = load_hardware(hw_path)
     layers = load_model_layers(model_path)

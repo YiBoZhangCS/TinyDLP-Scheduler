@@ -1,7 +1,7 @@
-"""Simplified dataflow traffic models.
+"""简化 dataflow 访存模型。
 
-These helpers are educational analytical models, not exact hardware simulation.
-They only estimate how different reuse choices can change DRAM traffic.
+这些函数是教学/分析模型，不是精确硬件仿真。
+它们只估计不同复用策略会如何改变 DRAM traffic。
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ def _ceil_div(a: int, b: int) -> int:
 
 @dataclass(frozen=True)
 class DataflowResult:
-    """Estimated DRAM traffic for one simplified dataflow choice."""
+    """某一种简化 dataflow 的 DRAM traffic 估计结果。"""
 
     dataflow: str
     dram_bytes: int
@@ -94,7 +94,7 @@ def _make_result(
 def output_stationary(
     gemm: GEMMShape, tile: GEMMTile, hw: HardwareConfig
 ) -> DataflowResult:
-    """Estimate traffic when output partial sums are kept stationary."""
+    """估计 output-stationary：尽量让输出 partial sum 常驻片上。"""
 
     m_tiles, _, n_tiles = _tile_counts(gemm, tile)
     data_bytes = hw.data_bytes()
@@ -115,8 +115,8 @@ def output_stationary(
         output_write_bytes=c_write_bytes,
         hw=hw,
         explanation=(
-            "C partial sums stay on chip across K tiles; A and B are streamed "
-            "by tile, and final C is written once."
+            "C partial sum 尽量跨 K tile 留在片上；A/B 按 tile 流式读取，"
+            "最终 C 只写回一次。"
         ),
     )
 
@@ -124,7 +124,7 @@ def output_stationary(
 def weight_stationary(
     gemm: GEMMShape, tile: GEMMTile, hw: HardwareConfig
 ) -> DataflowResult:
-    """Estimate traffic when weight tiles are kept stationary."""
+    """估计 weight-stationary：尽量让权重 tile 常驻片上。"""
 
     _, k_tiles, n_tiles = _tile_counts(gemm, tile)
     data_bytes = hw.data_bytes()
@@ -147,8 +147,8 @@ def weight_stationary(
         output_write_bytes=c_bytes,
         hw=hw,
         explanation=(
-            "B/weight tiles are reused across M tiles; B DRAM reads are reduced, "
-            "while C partial sums may spill between K tiles."
+            "B/weight tile 跨多个 M tile 复用，因此减少权重 DRAM 读取；"
+            "但 C partial sum 可能在 K tile 之间发生片外读写。"
         ),
         psum_in_sram=k_tiles <= 1,
         num_c_tiles=k_tiles,
@@ -158,7 +158,7 @@ def weight_stationary(
 def input_stationary(
     gemm: GEMMShape, tile: GEMMTile, hw: HardwareConfig
 ) -> DataflowResult:
-    """Estimate traffic when input tiles are kept stationary."""
+    """估计 input-stationary：尽量让输入 tile 常驻片上。"""
 
     m_tiles, k_tiles, _ = _tile_counts(gemm, tile)
     data_bytes = hw.data_bytes()
@@ -181,8 +181,8 @@ def input_stationary(
         output_write_bytes=c_bytes,
         hw=hw,
         explanation=(
-            "A/input tiles are reused across N tiles; A DRAM reads are reduced, "
-            "while C partial sums may spill between K tiles."
+            "A/input tile 跨多个 N tile 复用，因此减少输入 DRAM 读取；"
+            "但 C partial sum 可能在 K tile 之间发生片外读写。"
         ),
         psum_in_sram=k_tiles <= 1,
         num_c_tiles=k_tiles,
@@ -192,7 +192,7 @@ def input_stationary(
 def compare_dataflows(
     gemm: GEMMShape, tile: GEMMTile, hw: HardwareConfig
 ) -> list[DataflowResult]:
-    """Return output-, weight-, and input-stationary estimates."""
+    """同时返回 OS/WS/IS 三种 dataflow 的估计结果。"""
 
     return [
         output_stationary(gemm, tile, hw),
@@ -276,10 +276,10 @@ def _conv_psum_extra_bytes(
     if psum_in_sram or num_c_tiles <= 1:
         return 0
 
-    # If Tc does not cover all input channels, each output tile is accumulated
-    # across multiple input-channel tiles. When the partial sums cannot remain
-    # in SRAM, the intermediate INT32 psum is written and later read for every
-    # boundary between Tc tiles. The final output write is counted separately.
+    # 如果 Tc 没覆盖所有输入通道，一个输出 tile 需要跨多个 input-channel tile 累加。
+    # 当 partial sum 不能留在 SRAM 时，每两个 Tc tile 的边界都需要：
+    # 先写出中间 INT32 psum，下一轮再读回来继续累加。
+    # 最终输出写回在 output_write_bytes 中单独统计。
     return 2 * (num_c_tiles - 1) * output_write_bytes
 
 
@@ -289,7 +289,7 @@ def output_stationary_conv(
     hw: HardwareConfig,
     psum_in_sram: bool = True,
 ) -> DataflowResult:
-    """Estimate Conv DRAM traffic for output-stationary execution."""
+    """估计 Conv 的 output-stationary DRAM traffic。"""
 
     (
         input_once,
@@ -313,8 +313,8 @@ def output_stationary_conv(
         output_write_bytes=output_write,
         hw=hw,
         explanation=(
-            "Conv output-stationary keeps output partial sums on chip when "
-            "possible, so Tc splits do not force psum DRAM traffic."
+            "Conv output-stationary 尽量让输出 partial sum 留在片上，"
+            "因此 Tc 切分不一定带来 psum DRAM traffic。"
         ),
         psum_in_sram=psum_in_sram,
         num_c_tiles=c_tiles,
@@ -327,7 +327,7 @@ def weight_stationary_conv(
     hw: HardwareConfig,
     psum_in_sram: bool = False,
 ) -> DataflowResult:
-    """Estimate Conv DRAM traffic for weight-stationary execution."""
+    """估计 Conv 的 weight-stationary DRAM traffic。"""
 
     (
         input_once,
@@ -351,8 +351,8 @@ def weight_stationary_conv(
         output_write_bytes=output_write,
         hw=hw,
         explanation=(
-            "Conv weight-stationary reuses weight tiles across spatial tiles, "
-            "reducing repeated weight loads."
+            "Conv weight-stationary 让权重 tile 跨多个空间 tile 复用，"
+            "从而减少重复加载权重。"
         ),
         psum_in_sram=psum_in_sram,
         num_c_tiles=c_tiles,
@@ -365,7 +365,7 @@ def input_stationary_conv(
     hw: HardwareConfig,
     psum_in_sram: bool = False,
 ) -> DataflowResult:
-    """Estimate Conv DRAM traffic for input-stationary execution."""
+    """估计 Conv 的 input-stationary DRAM traffic。"""
 
     (
         input_once,
@@ -388,8 +388,8 @@ def input_stationary_conv(
         output_write_bytes=output_write,
         hw=hw,
         explanation=(
-            "Conv input-stationary reuses input activation tiles across output "
-            "channel tiles, reducing repeated input loads."
+            "Conv input-stationary 让输入激活 tile 跨多个输出通道 tile 复用，"
+            "从而减少重复加载输入。"
         ),
         psum_in_sram=psum_in_sram,
         num_c_tiles=c_tiles,
@@ -401,7 +401,7 @@ def compare_conv_dataflows(
     tile: ConvTile,
     hw: HardwareConfig,
 ) -> list[DataflowResult]:
-    """Return Conv output-, weight-, and input-stationary estimates."""
+    """同时返回 Conv OS/WS/IS 三种 dataflow 的估计结果。"""
 
     return [
         output_stationary_conv(layer, tile, hw, psum_in_sram=True),

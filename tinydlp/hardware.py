@@ -1,4 +1,4 @@
-"""Hardware configuration for simplified TinyDLP analytical models."""
+"""硬件配置：描述简化 DLP 的 PE 阵列、SRAM、频率和 DRAM 带宽。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def _validate_positive_float(name: str, value: float) -> None:
 
 @dataclass(frozen=True)
 class HardwareConfig:
-    """Simplified DLP hardware parameters."""
+    """简化 DLP 硬件参数。"""
 
     name: str
     array_m: int
@@ -43,46 +43,46 @@ class HardwareConfig:
         _validate_positive_float("dram_bandwidth_gb_s", self.dram_bandwidth_gb_s)
 
     def num_pe(self) -> int:
-        """Return number of processing elements in the 2D array."""
+        """返回二维 PE 阵列中的处理单元数量。"""
 
-        # The array has array_m rows and array_n columns, so PE count is M * N.
+        # 阵列有 array_m 行和 array_n 列，所以 PE 数量是二者相乘。
         return self.array_m * self.array_n
 
     def peak_macs_per_cycle(self) -> int:
-        """Return peak MAC throughput per cycle."""
+        """返回每周期理论峰值 MAC 吞吐。"""
 
-        # Every PE can issue mac_per_pe_per_cycle MACs each cycle.
-        # Peak MACs/cycle = number of PEs * MACs per PE per cycle.
+        # 每个 PE 每周期可以发起 mac_per_pe_per_cycle 次 MAC。
+        # 峰值 MACs/cycle = PE 数量 * 每个 PE 每周期 MAC 数。
         return self.num_pe() * self.mac_per_pe_per_cycle
 
     def peak_gmacs_per_second(self) -> float:
-        """Return peak throughput in GMAC/s."""
+        """返回以 GMAC/s 表示的理论峰值吞吐。"""
 
-        # frequency_mhz means million cycles/second.
+        # frequency_mhz 表示每秒百万周期。
         # GMAC/s = MACs/cycle * frequency_mhz * 1e6 / 1e9
-        #        = MACs/cycle * frequency_mhz / 1000.
+        #        = MACs/cycle * frequency_mhz / 1000。
         return self.peak_macs_per_cycle() * self.frequency_mhz / 1000
 
     def dram_bytes_per_cycle(self) -> float:
-        """Return off-chip DRAM bandwidth normalized to bytes per cycle."""
+        """返回折算到每周期的片外 DRAM 带宽，单位是 bytes/cycle。"""
 
-        # dram_bandwidth_gb_s is decimal GB/s here, so bytes/s = GB/s * 1e9.
-        # cycles/s = frequency_mhz * 1e6.
-        # bytes/cycle = bytes/s / cycles/s.
+        # 这里 dram_bandwidth_gb_s 使用十进制 GB/s，
+        # bytes/s = GB/s * 1e9，cycles/s = frequency_mhz * 1e6。
+        # bytes/cycle = bytes/s / cycles/s。
         return self.dram_bandwidth_gb_s * 1e9 / (self.frequency_mhz * 1e6)
 
     def sram_bytes(self) -> int:
-        """Return on-chip SRAM capacity in bytes."""
+        """返回片上 SRAM 容量，单位是字节。"""
 
         return self.sram_kb * 1024
 
     def data_bytes(self) -> int:
-        """Return storage bytes for input/weight data scalars."""
+        """返回输入激活和权重标量的存储字节数。"""
 
         return self.data_width_bits // 8
 
     def acc_bytes(self) -> int:
-        """Return storage bytes for accumulator scalars."""
+        """返回累加器/partial sum 标量的存储字节数。"""
 
         return self.acc_width_bits // 8
 

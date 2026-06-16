@@ -1,4 +1,4 @@
-"""Shared matplotlib style helpers for TinyDLP figures."""
+"""统一绘图风格：让所有 TinyDLP 图表适合 README 和 PPT 展示。"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ DPI = 300
 
 
 def apply_plot_style() -> None:
-    """Apply a clean, white, presentation-friendly matplotlib style."""
+    """应用白底、清晰字体、色盲友好配色的 matplotlib 风格。"""
 
     plt.rcParams.update(
         {
@@ -57,7 +57,7 @@ def apply_plot_style() -> None:
 
 
 def style_axes(ax, grid_axis: str = "y") -> None:
-    """Remove visual clutter and add a light grid."""
+    """去掉多余边框并添加浅色网格。"""
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -67,7 +67,7 @@ def style_axes(ax, grid_axis: str = "y") -> None:
 
 
 def save_figure(fig, path: str | Path) -> Path:
-    """Save a figure with stable 300 dpi and tight layout."""
+    """以固定 300 dpi 和紧凑布局保存图表。"""
 
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

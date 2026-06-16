@@ -1,3 +1,5 @@
+"""测试 gemm：验证 GEMM 形状、MAC 数和输出元素统计。"""
+
 from tinydlp.gemm import GEMMShape
 from tinydlp.layer import Conv2DLayer, FullyConnectedLayer
 

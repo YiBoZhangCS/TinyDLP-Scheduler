@@ -1,3 +1,5 @@
+"""测试 plot：验证 result.csv 可以生成标准图表文件。"""
+
 from tinydlp.gemm import GEMMShape
 from tinydlp.hardware import HardwareConfig
 from tinydlp.plot import generate_plots

@@ -1,11 +1,11 @@
-"""Simple tile enumeration helpers."""
+"""调度搜索器：枚举 tile/dataflow，并选择周期最小的映射方案。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
 
-from tinydlp.compute_model import TileComputeResult, estimate_compute, estimate_tile_compute
+from tinydlp.compute_model import estimate_compute, estimate_tile_compute
 from tinydlp.dataflow import (
     DataflowResult,
     input_stationary_conv,
@@ -39,7 +39,7 @@ ConvDataflowFn = Callable[
 
 @dataclass(frozen=True)
 class ScheduleResult:
-    """Combined compute and memory estimate for one GEMM schedule."""
+    """一个 GEMM 调度方案的计算、访存和瓶颈估计结果。"""
 
     layer_name: str
     gemm: GEMMShape
@@ -59,7 +59,7 @@ class ScheduleResult:
 
 @dataclass(frozen=True)
 class ConvComputeSummary:
-    """Compute summary for a fully tiled Conv schedule."""
+    """一个完整 Conv 切分方案的总计算周期汇总。"""
 
     macs: int
     ideal_cycles: int
@@ -71,7 +71,7 @@ class ConvComputeSummary:
 
 @dataclass(frozen=True)
 class ConvScheduleResult:
-    """Combined compute, SRAM, and DRAM estimate for one Conv-native schedule."""
+    """一个 Conv 原生调度方案的计算、SRAM 和 DRAM 汇总结果。"""
 
     layer_name: str
     layer: Conv2DLayer
@@ -128,7 +128,7 @@ def _size_counts(total: int, tile_size: int) -> dict[int, int]:
 
 
 def enumerate_gemm_tiles(gemm: GEMMShape, hw: HardwareConfig) -> list[GEMMTile]:
-    """Enumerate SRAM-valid GEMM tiles, sorted by SRAM footprint."""
+    """枚举所有满足 SRAM 容量约束的 GEMM tile，并按 SRAM 占用排序。"""
 
     valid_tiles: list[GEMMTile] = []
     for tile_m in _candidates_up_to(gemm.M):
@@ -166,15 +166,62 @@ def _tc_candidates(in_channels: int) -> list[int]:
     )
 
 
-def _spatial_candidates(limit: int) -> list[int]:
-    return _unique_positive([1, 2, 4, 8, 16, 32, limit], limit=limit)
+def _spatial_candidates(limit: int, array_m: int) -> list[int]:
+    """生成单个空间维度的候选值。
+
+    除了常见的 1/2/4/8/16/32，也加入 array_m 的因子。
+    这样当阵列 M 方向不是 16 这种 2 的幂时，例如 array_m=24，
+    搜索器也会考虑 3/6/12/24 这类更容易让 Tp*Tq 对齐阵列的切分。
+    """
+
+    values = [1, 2, 4, 8, 16, 32, limit]
+    divisor = 1
+    while divisor * divisor <= array_m:
+        if array_m % divisor == 0:
+            values.extend([divisor, array_m // divisor])
+        divisor += 1
+    return _unique_positive(values, limit=limit)
+
+
+def _spatial_tile_pairs(
+    out_h: int,
+    out_w: int,
+    tb: int,
+    array_m: int,
+) -> list[tuple[int, int]]:
+    """生成 Tp/Tq 组合，并优先返回 M_tile 对齐 array_m 的组合。
+
+    PE 阵列的 M 方向对应 GEMM/Conv tile 中的输出位置数量：
+
+        M_tile = Tb * Tp * Tq
+
+    因此提升 M 方向利用率时，真正应该优先对齐的是 M_tile % array_m，
+    而不是单独要求 Tp 或 Tq 是 array_m 的倍数。这里仍保留非对齐组合作为
+    兜底，因为 SRAM 很小时，最小可行 tile 可能无法满足整除关系。
+    """
+
+    pairs = [
+        (tp, tq)
+        for tp in _spatial_candidates(out_h, array_m)
+        for tq in _spatial_candidates(out_w, array_m)
+    ]
+
+    def sort_key(pair: tuple[int, int]) -> tuple[bool, int, int, int]:
+        tp, tq = pair
+        m_tile = tb * tp * tq
+        is_unaligned = m_tile % array_m != 0
+        # 对齐优先；同为对齐时，优先较大的空间 tile，以减少 tile 数和 halo 重复。
+        return is_unaligned, -(tp * tq), tp, tq
+
+    pairs.sort(key=sort_key)
+    return pairs
 
 
 def generate_conv_tile_candidates(
     layer: Conv2DLayer,
     hw: HardwareConfig,
 ) -> list[ConvTile]:
-    """Generate Conv-native tile candidates before SRAM filtering."""
+    """生成 Conv 原生 tile 候选，尚未做 SRAM 容量过滤。"""
 
     out_h, out_w = layer.output_hw()
     candidates: list[ConvTile] = []
@@ -183,11 +230,15 @@ def generate_conv_tile_candidates(
             continue
         for tm in _tm_candidates(layer.out_channels, hw.array_n):
             for tc in _tc_candidates(layer.in_channels):
-                for tp in _spatial_candidates(out_h):
-                    for tq in _spatial_candidates(out_w):
-                        candidates.append(
-                            ConvTile(tb=tb, tm=tm, tc=tc, tp=tp, tq=tq)
-                        )
+                for tp, tq in _spatial_tile_pairs(
+                    out_h=out_h,
+                    out_w=out_w,
+                    tb=tb,
+                    array_m=hw.array_m,
+                ):
+                    candidates.append(
+                        ConvTile(tb=tb, tm=tm, tc=tc, tp=tp, tq=tq)
+                    )
     return candidates
 
 
@@ -196,7 +247,7 @@ def enumerate_conv_tiles(
     hw: HardwareConfig,
     double_buffer: bool = False,
 ) -> list[ConvTile]:
-    """Enumerate SRAM-valid Conv-native tiles, sorted by SRAM footprint."""
+    """枚举满足 SRAM 容量约束的 Conv tile，并按 SRAM 占用排序。"""
 
     valid_tiles: list[ConvTile] = []
     for tile in generate_conv_tile_candidates(layer, hw):
@@ -272,7 +323,7 @@ def evaluate_schedule(
     tile: GEMMTile,
     dataflow_name: str,
 ) -> ScheduleResult:
-    """Evaluate compute, memory, and bottleneck estimates for one schedule."""
+    """评估一个 GEMM tile + dataflow 调度方案。"""
 
     compute = estimate_compute(gemm, hw)
     memory = _dataflow_fn(dataflow_name)(gemm, tile, hw)
@@ -319,6 +370,8 @@ def _estimate_tiled_conv_compute(
     tile: ConvTile,
     hw: HardwareConfig,
 ) -> ConvComputeSummary:
+    """把一个 Conv tile 方案展开到所有尾块，累计整层 compute cycles。"""
+
     out_h, out_w = layer.output_hw()
     b_counts = _size_counts(layer.batch, tile.tb)
     p_counts = _size_counts(out_h, tile.tp)
@@ -335,11 +388,14 @@ def _estimate_tiled_conv_compute(
     for b_size, b_count in b_counts.items():
         for p_size, p_count in p_counts.items():
             for q_size, q_count in q_counts.items():
+                # M_tile 对应当前 batch/spatial tile 内的输出位置数量。
                 M_tile = b_size * p_size * q_size
                 spatial_count = b_count * p_count * q_count
                 for m_size, m_count in m_counts.items():
+                    # N_tile 对应当前输出通道 tile 大小。
                     N_tile = m_size
                     for c_size, c_count in c_counts.items():
+                        # K_tile 对应当前输入通道切片乘以卷积核面积。
                         K_tile = c_size * layer.kernel_h * layer.kernel_w
                         multiplicity = spatial_count * m_count * c_count
                         compute = estimate_tile_compute(
@@ -378,8 +434,9 @@ def evaluate_conv_schedule(
     psum_in_sram: bool | None = None,
     double_buffer: bool = False,
 ) -> ConvScheduleResult:
-    """Evaluate compute, SRAM, and DRAM estimates for one Conv schedule."""
+    """评估一个 Conv tile + dataflow 调度方案。"""
 
+    # 先检查该 Conv tile 的 input/weight/psum 是否能放进 SRAM。
     sram = conv_tile_sram_usage_for_hw(
         tile=tile,
         kernel_h=layer.kernel_h,
@@ -391,6 +448,8 @@ def evaluate_conv_schedule(
     gemm_tile = conv_tile_to_gemm_tile(tile, layer.kernel_h, layer.kernel_w)
     compute = _estimate_tiled_conv_compute(layer, tile, hw)
 
+    # OS 默认假设 psum 留在 SRAM；WS/IS 默认更偏向保权重/输入，
+    # 因此可能产生 psum spill。调用方也可以显式覆盖这个假设。
     keep_psum = (
         _default_conv_psum_in_sram(dataflow_name)
         if psum_in_sram is None
@@ -398,6 +457,7 @@ def evaluate_conv_schedule(
     )
     memory = _conv_dataflow_fn(dataflow_name)(layer, tile, hw, keep_psum)
 
+    # no_overlap 是搬运和计算串行；ideal_overlap 是理想重叠下界。
     compute_cycles = compute.systolic_cycles
     no_overlap_cycles = compute_cycles + memory.memory_cycles
     ideal_overlap_cycles = max(compute_cycles, memory.memory_cycles)
@@ -441,7 +501,7 @@ def search_topk_conv_schedules(
     overlap_mode: str = "ideal",
     double_buffer: bool = False,
 ) -> list[ConvScheduleResult]:
-    """Search legal Conv tiles and dataflows, returning the top-k schedules."""
+    """搜索合法 Conv tile/dataflow，返回按目标周期排序的前 k 个方案。"""
 
     if k <= 0:
         raise ValueError(f"k must be positive, got {k}")
@@ -487,7 +547,7 @@ def search_best_conv_schedule(
     overlap_mode: str = "ideal",
     double_buffer: bool = False,
 ) -> ConvScheduleResult:
-    """Return the best Conv-native schedule under the selected objective."""
+    """返回当前 overlap 目标下最优的 Conv 原生调度方案。"""
 
     return search_topk_conv_schedules(
         layer=layer,
@@ -504,7 +564,7 @@ def search_topk_schedules(
     k: int = 10,
     overlap_mode: str = "ideal",
 ) -> list[ScheduleResult]:
-    """Search legal tiles and dataflows, returning the top-k schedules."""
+    """搜索合法 GEMM tile/dataflow，返回按目标周期排序的前 k 个方案。"""
 
     if k <= 0:
         raise ValueError(f"k must be positive, got {k}")
@@ -538,7 +598,7 @@ def search_best_schedule(
     hw: HardwareConfig,
     overlap_mode: str = "ideal",
 ) -> ScheduleResult:
-    """Return the best schedule under the selected overlap objective."""
+    """返回当前 overlap 目标下最优的 GEMM 调度方案。"""
 
     return search_topk_schedules(
         gemm=gemm,
@@ -549,7 +609,7 @@ def search_best_schedule(
 
 
 def pretty_print_schedule(result: ScheduleResult) -> str:
-    """Print and return a human-readable schedule summary."""
+    """打印并返回便于人阅读的 GEMM 调度摘要。"""
 
     text = "\n".join(
         [
@@ -579,7 +639,7 @@ def pretty_print_schedule(result: ScheduleResult) -> str:
 
 
 def format_conv_tile(tile: ConvTile) -> str:
-    """Return a compact Conv tile string."""
+    """返回紧凑的 Conv tile 字符串。"""
 
     return (
         f"Tb={tile.tb},Tm={tile.tm},Tc={tile.tc},"
@@ -588,7 +648,7 @@ def format_conv_tile(tile: ConvTile) -> str:
 
 
 def pretty_print_conv_schedule(result: ConvScheduleResult) -> str:
-    """Print and return a human-readable Conv schedule summary."""
+    """打印并返回便于人阅读的 Conv 调度摘要。"""
 
     traffic = result.dram_traffic
     sram = result.sram_usage
@@ -634,7 +694,7 @@ def pretty_print_conv_schedule(result: ConvScheduleResult) -> str:
 
 
 def demo() -> None:
-    """Print a small tile-enumeration demo."""
+    """打印一个小型 tile 枚举示例，方便手动运行本文件时观察输出。"""
 
     gemm = GEMMShape(M=1024, K=256, N=256, name="demo_gemm")
     hw = HardwareConfig(name="dlp_16x16", array_m=16, array_n=16, sram_kb=64)

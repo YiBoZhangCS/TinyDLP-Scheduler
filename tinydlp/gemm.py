@@ -1,4 +1,4 @@
-"""GEMM shape utilities for TinyDLP analytical models."""
+"""GEMM 形状工具：描述矩阵乘法 C = A x B 的 M/K/N 维度。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ def _validate_positive(name: str, value: int) -> None:
 
 @dataclass(frozen=True)
 class GEMMShape:
-    """Shape of C = A x B, where A is M x K and B is K x N."""
+    """矩阵乘法形状：A 是 M x K，B 是 K x N，输出 C 是 M x N。"""
 
     M: int
     K: int
@@ -25,17 +25,17 @@ class GEMMShape:
         _validate_positive("N", self.N)
 
     def macs(self) -> int:
-        """Return total multiply-accumulate operations."""
+        """返回总 MAC 数，也就是所有输出元素需要的乘加次数。"""
 
-        # GEMM C = A x B:
-        # A has shape M x K, B has shape K x N, C has shape M x N.
-        # Each C element accumulates K products, so total MACs = M * K * N.
+        # GEMM C = A x B：
+        # A 的形状是 M x K，B 的形状是 K x N，C 的形状是 M x N。
+        # 每个 C 元素累加 K 个乘积，所以总 MACs = M * K * N。
         return self.M * self.K * self.N
 
     def output_elements(self) -> int:
-        """Return number of elements in output matrix C."""
+        """返回输出矩阵 C 的元素个数。"""
 
-        # C has shape M x N, so it contains M * N output elements.
+        # C 的形状是 M x N，因此共有 M * N 个输出元素。
         return self.M * self.N
 
     def pretty_summary(self) -> str:

@@ -1,6 +1,6 @@
-"""Demonstrate modulus effects on GEMM PE utilization.
+"""旧版模数效应 demo：展示 GEMM 尺寸不能整除阵列时 PE 利用率下降。
 
-Run from the project root:
+从项目根目录运行：
 
     python examples/mod_effect_demo.py
 """
